@@ -1,0 +1,188 @@
+// prisma/schema.prisma
+
+// Cấu hình nguồn dữ liệu (PostgreSQL)
+// Bạn sẽ cần đặt biến môi trường DATABASE_URL trong file .env của dự án NestJS của mình.
+// Ví dụ: DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:123456@localhost:5432/blog"
+}
+
+// Cấu hình Prisma Client
+// Lệnh `npx prisma generate` sẽ tạo ra Prisma Client
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+// Định nghĩa các Enum
+
+// Vai trò của người dùng: ADMIN (quản trị viên) hoặc COMMENTER (người bình luận)
+enum Role {
+  ADMIN
+  COMMENTER
+}
+
+// Trạng thái của bài viết: DRAFT (bản nháp) hoặc PUBLISHED (đã xuất bản)
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// Trạng thái của bình luận: PENDING (chờ duyệt), APPROVED (đã duyệt), SPAM
+enum CommentStatus {
+  PENDING
+  APPROVED
+  SPAM
+}
+
+// Các loại thông báo khác nhau
+enum NotificationType {
+  POST_UPDATE
+  COMMENT_REPLY
+  COMMENT_APPROVED
+  GENERAL
+}
+
+
+
+// Định nghĩa các Models (bảng trong cơ sở dữ liệu)
+
+// Model: User (Người dùng)
+// Lưu trữ thông tin tài khoản admin và người dùng bình luận qua GitHub.
+model User {
+  id            String    @id @default(uuid()) // ID duy nhất, kiểu UUID
+  email         String?   @unique             // Email, có thể null, duy nhất
+  password      String?                       // Mật khẩu đã hash (chỉ cho admin)
+  username      String    @unique             // Tên người dùng, duy nhất
+  avatarUrl     String?                       // URL ảnh đại diện
+  githubId      String?   @unique             // ID GitHub, duy nhất
+  role          Role      @default(COMMENTER)  // Vai trò người dùng (ADMIN/COMMENTER)
+  createdAt     DateTime  @default(now())    // Thời điểm tạo
+  updatedAt     DateTime  @updatedAt         // Thời điểm cập nhật cuối cùng
+
+  // Mối quan hệ với các bảng khác
+  posts         Post[]                        // Một người dùng có thể viết nhiều bài Post
+  comments      Comment[]                     // Một người dùng có thể tạo nhiều Comment
+  refreshTokens RefreshToken[]                // Mối quan hệ 1-n với RefreshToken
+  notifications NotificationUser[]            // Mối quan hệ 1-n với NotificationUser (thông báo người dùng đã nhận)
+}
+
+// Model: RefreshToken
+// Lưu trữ các refresh token để quản lý phiên đăng nhập bền vững.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  token     String    @unique // Chuỗi refresh token (nên được hash)
+  userId    String                         // Khóa ngoại tới User
+  expiresAt DateTime                       // Thời điểm hết hạn
+  createdAt DateTime  @default(now())
+  isRevoked Boolean   @default(false)     // Cờ cho biết token đã bị thu hồi
+
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+
+// Model: Category (Danh mục)
+// Phân loại các bài viết theo chủ đề.
+model Category {
+  id          String    @id @default(uuid()) // ID duy nhất
+  name        String    @unique             // Tên danh mục, duy nhất
+  slug        String    @unique             // Slug thân thiện với URL, duy nhất
+  description String?                       // Mô tả ngắn gọn (tùy chọn)
+  createdAt   DateTime  @default(now())    // Thời điểm tạo
+  updatedAt   DateTime  @updatedAt         // Thời điểm cập nhật cuối cùng
+
+  // Mối quan hệ với các bảng khác
+  posts       Post[]    // Một Category có thể chứa nhiều bài Post
+}
+
+// Model: Tag (Thẻ)
+// Gắn thẻ cho bài viết để dễ dàng tìm kiếm và phân loại.
+model Tag {
+  id        String    @id @default(uuid()) // ID duy nhất
+  name      String    @unique             // Tên thẻ, duy nhất
+  slug      String    @unique             // Slug thân thiện với URL, duy nhất
+  createdAt DateTime  @default(now())    // Thời điểm tạo
+  updatedAt DateTime  @updatedAt         // Thời điểm cập nhật cuối cùng
+
+  // Mối quan hệ với các bảng khác
+  posts     Post[]    // Mối quan hệ nhiều-nhiều với Post (Prisma sẽ tự tạo bảng liên kết)
+}
+
+// Model: Post (Bài viết)
+// Lưu trữ nội dung chính của blog.
+model Post {
+  id             String     @id @default(uuid()) // ID duy nhất
+  title          String                         // Tiêu đề bài viết
+  slug           String     @unique             // Slug thân thiện với URL, duy nhất
+  content        String                         // Nội dung bài viết (dạng Markdown)
+  excerpt        String?                        // Đoạn mô tả ngắn gọn (tùy chọn)
+  featuredImageUrl String?                      // URL ảnh đại diện (từ DigitalOcean Spaces)
+  status         PostStatus @default(DRAFT)     // Trạng thái bài viết (DRAFT/PUBLISHED)
+  publishedAt    DateTime?                      // Thời điểm xuất bản
+  viewsCount     Int        @default(0)         // Số lượt xem (mặc định 0)
+
+  authorId       String                         // ID của tác giả bài viết
+  categoryId     String?                        // ID của danh mục (tùy chọn)
+
+  createdAt      DateTime   @default(now())    // Thời điểm tạo bài viết
+  updatedAt      DateTime   @updatedAt         // Thời điểm cập nhật cuối cùng
+
+  // Mối quan hệ với các bảng khác
+  author         User       @relation(fields: [authorId], references: [id]) // Liên kết 1-n với User (tác giả)
+  category       Category?  @relation(fields: [categoryId], references: [id]) // Liên kết 1-n với Category (tùy chọn)
+  tags           Tag[]                          // Mối quan hệ nhiều-nhiều với Tag
+  comments       Comment[]                      // Một bài Post có nhiều Comment
+}
+
+// Model: Comment (Bình luận)
+// Lưu trữ các bình luận của độc giả.
+model Comment {
+  id        String        @id @default(uuid()) // ID duy nhất
+  content   String                           // Nội dung bình luận
+  status    CommentStatus @default(PENDING)    // Trạng thái bình luận (PENDING/APPROVED/SPAM)
+  postId    String                           // ID của bài viết mà bình luận thuộc về
+  userId    String                           // ID của người dùng đã bình luận
+
+  // Mối quan hệ tự tham chiếu cho bình luận con (replies)
+  parentId  String?                          // ID của bình luận cha (nếu là bình luận con)
+  parent    Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction) // Bình luận cha
+  replies   Comment[]     @relation("CommentReplies") // Các bình luận con
+
+  createdAt DateTime      @default(now())    // Thời điểm tạo bình luận
+  updatedAt DateTime      @updatedAt         // Thời điểm cập nhật cuối cùng
+
+  // Mối quan hệ với các bảng khác
+  post      Post          @relation(fields: [postId], references: [id]) // Liên kết 1-n với Post
+  author    User          @relation(fields: [userId], references: [id]) // Liên kết 1-n với User (người bình luận)
+}
+
+// Model: Notification (Thông báo chung)
+// Định nghĩa nội dung và loại của các thông báo.
+model Notification {
+  id          String           @id @default(uuid())
+  title       String
+  content     String
+  type        NotificationType // Loại thông báo (ví dụ: POST_UPDATE, COMMENT_REPLY)
+  link        String?          // URL để điều hướng khi nhấp vào thông báo
+  createdAt   DateTime         @default(now())
+
+  // Mối quan hệ với các bảng khác
+  userNotifications NotificationUser[] // Mối quan hệ 1-n với NotificationUser
+}
+
+// Model: NotificationUser (Trạng thái thông báo cho từng người dùng)
+// Theo dõi thông báo đã được gửi đến người dùng nào và trạng thái đọc của nó.
+model NotificationUser {
+  id             String    @id @default(uuid())
+  notificationId String    // Khóa ngoại tới Notification
+  userId         String    // Khóa ngoại tới User
+  isRead         Boolean   @default(false) // Trạng thái đã đọc/chưa đọc
+  createdAt      DateTime  @default(now())
+
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  // Đảm bảo mỗi người dùng chỉ nhận một bản của một thông báo cụ thể
+  @@unique([notificationId, userId])
+}
