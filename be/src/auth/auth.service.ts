@@ -87,7 +87,7 @@ export class AuthService {
   async refreshTokens(refreshToken: string) {
     const tokens = await this.repo.findActiveRefreshTokens();
     const results = await Promise.all(
-      tokens.map(async (token, idx) => {
+      tokens.map(async (token) => {
         const match = await bcrypt.compare(refreshToken, token.token);
         return match ? token : null;
       }),
