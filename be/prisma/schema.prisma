@@ -5,7 +5,7 @@
 // Ví dụ: DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DB_URL")
 }
 
 // Cấu hình Prisma Client

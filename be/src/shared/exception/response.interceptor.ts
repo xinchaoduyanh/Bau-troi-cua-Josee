@@ -1,33 +1,58 @@
 import {
   CallHandler,
   ExecutionContext,
+  HttpStatus,
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Response } from 'express'; // Import Response từ express để có kiểu rõ ràng
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import {
+  RESPONSE_METADATA_KEY,
+  ResponseOptions,
+} from '../decorators/response.decorator';
+
+export type ResponseData<T = unknown> = {
+  data?: T;
+  message?: string;
+  statusCode: number;
+};
 
 @Injectable()
-export class ResponseInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+export class ResponseInterceptor<T = unknown>
+  implements NestInterceptor<T, ResponseData<T>>
+{
+  constructor(private readonly reflector: Reflector) {}
+
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler<T>,
+  ): Observable<ResponseData<T>> {
+    const responseOptions: ResponseOptions | undefined =
+      this.reflector.get<ResponseOptions>(
+        RESPONSE_METADATA_KEY,
+        context.getHandler(),
+      );
+
     return next.handle().pipe(
-      map((data: unknown) => {
-        // Lấy đối tượng phản hồi (response) từ context
-        // Sử dụng kiểu Response từ 'express' để có kiểu rõ ràng hơn
-        const res = context.switchToHttp().getResponse<Response>();
-
-        // Đảm bảo statusCode là một số.
-        // Mặc dù res.statusCode thường là number, nhưng kiểm tra cẩn thận vẫn tốt.
-        const statusCode: number =
-          typeof res.statusCode === 'number' ? res.statusCode : 200;
-
-        // Trả về đối tượng phản hồi đã được định dạng
-        return {
-          statusCode: statusCode, // Gán giá trị statusCode đã được kiểm tra kiểu
-          data: data, // data đã được khai báo là unknown, nên việc gán nó là an toàn
-          message: 'Success',
+      map((data: T): ResponseData<T> => {
+        const response: ResponseData<T> = {
+          statusCode: responseOptions?.status ?? HttpStatus.OK,
+          data,
         };
+
+        if (responseOptions?.message) {
+          response.message = responseOptions.message;
+        }
+
+        // Set the status code on the response object
+        const responseObj: { status: (code: number) => void } = context
+          .switchToHttp()
+          .getResponse();
+        responseObj.status(response.statusCode);
+
+        return response;
       }),
     );
   }

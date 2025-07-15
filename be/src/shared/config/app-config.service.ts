@@ -15,8 +15,39 @@ export class AppConfigService {
   }
 
   get databaseUrl(): string {
-    return this.configService.get('DATABASE_URL', { infer: true }) as string;
+    return this.configService.get('DB_URL', { infer: true }) as string;
   }
 
-  // Thêm getter cho các biến môi trường khác nếu cần
+  get jwtSecret(): string {
+    return this.configService.get('JWT_SECRET', { infer: true }) as string;
+  }
+
+  get githubClientId(): string {
+    return this.configService.get('GITHUB_CLIENT_ID', {
+      infer: true,
+    }) as string;
+  }
+
+  get githubClientSecret(): string {
+    return this.configService.get('GITHUB_CLIENT_SECRET', {
+      infer: true,
+    }) as string;
+  }
+
+  get githubCallbackUrl(): string {
+    return this.configService.get('GITHUB_CALLBACK_URL', {
+      infer: true,
+    }) as string;
+  }
+
+  get jwtAccessTokenExpiresIn(): string {
+    return this.configService.get('JWT_ACCESS_TOKEN_EXPIRES_IN', {
+      infer: true,
+    }) as string;
+  }
+  get jwtRefreshTokenExpiresIn(): string {
+    return this.configService.get('JWT_REFRESH_TOKEN_EXPIRES_IN', {
+      infer: true,
+    }) as string;
+  }
 }
